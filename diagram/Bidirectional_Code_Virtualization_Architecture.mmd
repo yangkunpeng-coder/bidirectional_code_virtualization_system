@@ -1,0 +1,94 @@
+---
+title: Bidirectional Code Virtualization System — 总体架构与工作流程图
+config:
+  theme: base
+  themeVariables:
+    fontFamily: 'Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif'
+    fontSize: 17px
+    primaryTextColor: '#1D3047'
+    lineColor: '#64788D'
+  flowchart:
+    htmlLabels: true
+    curve: linear
+    nodeSpacing: 30
+    rankSpacing: 42
+---
+%% 唯一事实依据：doc/Bidirectional_Code_Virtualization_System_总体方案_v0.2.md
+%% 这是实验规划图，候选模型与训练目标不代表已经完成部署。
+%% SVG 采用固定 1920×1080 出版布局；本文件保留同一模块与信息流供修改。
+flowchart TB
+  subgraph A["A · 系统运行时工作流程｜人在环 Human-in-the-Loop"]
+    direction LR
+    S1["<b>S1 · 完整真实项目 / 人工</b><br/>人工开发、发现 BUG 或提出需求<br/>选择目标函数 / 代码切片，描述修改目的"]
+    subgraph PY["S2 · Python 原型系统｜流程编排与数据传递<br/>接收切片和目的 · 创建虚拟工作区 · 保存映射 · 调用本地模型 / Codex CLI · 展示恢复结果"]
+      direction LR
+      S3["<b>S3 · 本地小模型：正向代码虚拟化</b><br/>真实代码 → 虚拟代码<br/>识别函数、类、参数与变量<br/>生成虚拟名称，建立稳定映射<br/>尽量保持原有逻辑与结构<br/>按目标代码和修改目的生成虚假上下文"]
+      S4["<b>S4 · Codex CLI / 虚拟工作区</b><br/>仅修改虚拟化后的目标代码切片<br/>结合虚假上下文和用户修改目的<br/>输出修改后的虚拟代码<br/><b>不承担正向转换或反向还原</b>"]
+      S5["<b>S5 · 本地小模型：反向代码还原</b><br/>虚拟代码 → 真实代码<br/>对照修改前后代码，识别变量身份<br/>处理变量重命名、新增与删除<br/>生成符合项目风格的真实变量名<br/>结合原映射恢复，保留有效代码修改"]
+      MAP["<b>Python 本地保留的信息</b><br/>原映射 + 修改前虚拟代码<br/>映射信息不提供给 Codex CLI"]
+    end
+    S6["<b>S6 · 人工应用与实验验证</b><br/>检查恢复代码，决定是否采用<br/>将代码应用到完整真实项目<br/>自行编译、运行和测试，判断实际效果<br/>记录成功 / 失败案例"]
+  end
+
+  subgraph B["B · 本地模型训练体系｜规划路线，训练前验证加载、适配、训练与重载推理"]
+    direction LR
+    BASE["<b>Qwen3-Coder-Next</b><br/>首选基础模型候选"]
+    DATA["<b>专用训练数据集构建</b><br/>Dataset 01 正向代码虚拟化<br/>Dataset 02 虚假上下文生成<br/>Dataset 03 变量身份识别<br/>Dataset 04 真实命名生成<br/>Dataset 05 反向代码还原<br/>配对样本、质量检查与数据划分"]
+    SFT["<b>第一阶段：LoRA + SFT</b><br/>参数高效微调 / 多任务监督训练<br/>ms-swift · 主训练框架<br/>Megatron-SWIFT · 分布式训练<br/>ModelScope MCore-Bridge · 模型桥接<br/>Megatron-Core · 底层训练引擎<br/>LLaMA-Factory · 备选 / 对照"]
+    MODEL["<b>训练目标：具备双向虚拟化能力的本地模型</b><br/>正向虚拟化 / 虚假上下文生成<br/>变量身份识别 / 真实命名生成<br/>变量变化处理 / 反向代码还原<br/>核心能力测试与端到端实验评估<br/><b>规划能力，非已完成部署</b>"]
+    OPT["<b>后续可选优化：DPO / GRPO</b><br/>SFT 基本可用且评价可靠后，按实验收益决定<br/>vLLM 仅根据后续强化学习方案决定是否采用<br/>DPO / GRPO 不作为第一阶段必经步骤"]
+  end
+
+  subgraph C["C · 系统职责边界"]
+    direction LR
+    HUMAN["<b>人工</b><br/>完整项目管理、选片与需求<br/>最终应用、编译、运行和测试<br/>根据实际效果决定是否接受修改"]
+    PYROLE["<b>Python</b><br/>实验流程编排<br/>本地模型与 Codex CLI 调度<br/>虚拟工作区与本地映射管理"]
+    LOCAL["<b>本地小模型</b><br/>正向虚拟化 / 虚假上下文生成<br/>变量身份识别 / 变量变化处理<br/>真实命名生成 / 反向代码还原"]
+    CODEX["<b>Codex CLI</b><br/>仅修改虚拟化后的目标代码切片<br/>完整真实项目与原映射不提供<br/>代码转换与还原由本地模型负责"]
+  end
+  S1 -->|"目标切片 + 修改目的"| S3
+  S3 -->|"虚拟目标切片 + 虚假上下文"| S4
+  S4 -->|"修改后的虚拟代码"| S5
+  S5 -->|"恢复后的真实代码（经 Python 展示）"| S6
+  S3 -->|"Python 在本地保存"| MAP
+  MAP -->|"原映射 + 修改前虚拟代码"| S5
+  S6 -.->|"仍有 BUG / 新需求：人工发起下一轮"| S1
+  BASE -.-> SFT
+  DATA -.-> SFT
+  SFT -.-> MODEL
+  MODEL -.->|"同一本地模型 · 正向阶段"| S3
+  MODEL -.->|"同一本地模型 · 反向阶段"| S5
+  MODEL -.->|"按 SFT 效果与实验收益决定"| OPT
+  S6 -.->|"成功 / 失败案例 → 补充薄弱数据 → 再训练与评估"| DATA
+
+  classDef human fill:#F0F6F1,stroke:#49705D,color:#1D3047,stroke-width:1.5px;
+  classDef local fill:#ECF7F6,stroke:#147D80,color:#1D3047,stroke-width:1.5px;
+  classDef python fill:#F0F5FC,stroke:#3C66AF,color:#1D3047;
+  classDef codex fill:#FFF7E9,stroke:#A86B18,color:#1D3047,stroke-width:1.5px;
+  classDef optional fill:#F8F4FC,stroke:#7B60A5,color:#1D3047,stroke-dasharray:3 4;
+  class S1,S6,HUMAN human;
+  class S3,S5,MODEL,SFT,LOCAL local;
+  class MAP,BASE,DATA,PYROLE python;
+  class S4,CODEX codex;
+  class OPT optional;
+  style A fill:#FFFFFF,stroke:#D8E2EC
+  style PY fill:#F0F5FC,stroke:#B8CBE8
+  style B fill:#FFFFFF,stroke:#D8E2EC
+  style C fill:#FFFFFF,stroke:#D8E2EC
+  linkStyle 0 stroke:#64788D,stroke-width:1.8px;
+  linkStyle 1 stroke:#147D80,stroke-width:1.8px;
+  linkStyle 2 stroke:#A86B18,stroke-width:1.8px;
+  linkStyle 3 stroke:#166C7A,stroke-width:1.8px;
+  linkStyle 4 stroke:#3C66AF,stroke-width:1.8px;
+  linkStyle 5 stroke:#3C66AF,stroke-width:1.8px;
+  linkStyle 6 stroke:#49705D,stroke-width:1.8px,stroke-dasharray:9 5;
+  linkStyle 7 stroke:#147D80,stroke-width:1.8px,stroke-dasharray:6 4;
+  linkStyle 8 stroke:#147D80,stroke-width:1.8px,stroke-dasharray:6 4;
+  linkStyle 9 stroke:#147D80,stroke-width:1.8px,stroke-dasharray:6 4;
+  linkStyle 10 stroke:#147D80,stroke-width:1.8px,stroke-dasharray:6 4;
+  linkStyle 11 stroke:#147D80,stroke-width:1.8px,stroke-dasharray:6 4;
+  linkStyle 12 stroke:#7B60A5,stroke-width:1.8px,stroke-dasharray:2 4;
+  linkStyle 13 stroke:#B16B4A,stroke-width:1.8px,stroke-dasharray:10 4 2 4;
+
+%% 图例：实线=运行时数据/映射；6 4虚线=训练/模型关联；2 4点线及虚框=可选优化；9 5长虚线=人工下一轮；点划线=实验数据反馈。
+%% 原始方案 SHA-256: 2fb7f1fc32f2bfb29169017dd3b0d2e45285fbaa23e94089290413ec53ef7f33
