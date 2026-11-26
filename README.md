@@ -12,9 +12,9 @@ Bidirectional Code Virtualization System 探索一种通过本地模型完成代
 
 ## 总体架构
 
-[![Bidirectional Code Virtualization System 总体架构与工作流程图，包含运行流程、本地模型训练体系和系统职责边界](diagram/Bidirectional_Code_Virtualization_Architecture.png)](diagram/Bidirectional_Code_Virtualization_Architecture.svg)
+[![Bidirectional Code Virtualization System 总体架构与工作流程图，包含运行流程、本地模型训练体系和系统职责边界](diagram/Bidirectional_Code_Virtualization_Architecture.png)](diagram/Bidirectional_Code_Virtualization_Architecture.png)
 
-*点击图片可查看 SVG 矢量版。图中实线表示运行时数据流，不同虚线区分模型训练、可选优化与实验反馈。*
+*图中实线表示运行时数据流，不同虚线区分模型训练、可选优化与实验反馈。*
 
 ## 核心思想：在虚拟代码空间中完成修改
 
